@@ -1,0 +1,45 @@
+<html>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/webcamjs/1.0.6/webcam.min.js"></script>
+
+  <div id="container" style="position: relative;">
+    <canvas id="overlay" style="width: 320px; height: 240px; position: absolute;"></canvas>
+    <div id="my_camera" style="width: 320px; height: 240px;"></div>
+  </div>
+
+  <script language="JavaScript">
+      var overlay = document.getElementById("overlay");
+      var ctx = overlay.getContext("2d");
+      /*Webcam.set({
+        width: 640,
+        height: 480,
+        crop_width: 400,
+        crop_height: 400,
+      });*/
+      Webcam.attach( '#my_camera' );
+
+      function takeSnapshot() {
+          Webcam.snap(function(data_uri) {
+              Webcam.upload(data_uri, 'check_user', function(code, text) {
+                var res = JSON.parse(text);
+
+                ctx.clearRect(0, 0, overlay.width, overlay.height);
+                for(var i=0; i<res['faces'].length; i++){
+                  var face = res['faces'][i];
+                  ctx.lineWidth = 2;
+                  ctx.strokeStyle = "lime";
+                  ctx.strokeRect(face.x, face.y, face.width, face.height);
+                }
+              });
+          });
+      }
+      
+      function loop() {
+        setTimeout(function(){
+          takeSnapshot();
+          loop();
+        }, 200);
+      }
+      setTimeout(loop, 1000);
+      
+  </script>
+</html>
