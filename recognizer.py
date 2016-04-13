@@ -7,8 +7,20 @@ class Recognizer:
 
     def __init__(self, img_dir, casc_path):
         images, labels = self.__load_images(img_dir)
-        self.model = cv2.createEigenFaceRecognizer()
-        self.model.train(np.asarray(images), np.asarray(labels))
+
+        self.id_to_label_hash = {}
+        labels_processed = {}
+        hash_id = 0
+        hashed_labels = []
+        for label in labels:
+            if label not in labels_processed:
+                hash_id += 1
+                labels_processed[label] = hash_id
+                self.id_to_label_hash[hash_id] = label
+            hashed_labels.append(labels_processed[label])
+
+        self.model = cv2.createEigenFaceRecognizer(threshold=9000)
+        self.model.train(np.asarray(images), np.asarray(hashed_labels))
 
         self.classifier = cv2.CascadeClassifier(casc_path)
 
@@ -23,9 +35,14 @@ class Recognizer:
                 if os.path.isdir(full_image_path):
                     next
                 try:
-                    img = cv2.imread(full_image_path, cv2.IMREAD_GRAYSCALE)
-                    images.append(img)
-                    labels.append(1)
+                    orig = cv2.imread(full_image_path, cv2.IMREAD_GRAYSCALE)
+                    resized = cv2.resize(orig, (200, 200))
+                    mirrored = cv2.flip(resized, 0)
+
+                    images.append(resized)
+                    labels.append(base_dir)
+                    images.append(mirrored)
+                    labels.append(base_dir)
                 except Exception as exp:
                     print exp
                     next
@@ -40,18 +57,22 @@ class Recognizer:
         cx = face['x'] + (face['width'] / 2)
         cy = face['y'] + (face['height'] / 2)
 
-        x1 = cx - 100
-        x2 = cx + 100
+        max_dim = face['width']
+        if face['height'] >= max_dim:
+            max_dim = face['height']
 
-        y1 = cy - 100
-        y2 = cy + 100
+        x1 = cx - (max_dim * 0.5)
+        x2 = cx + (max_dim * 0.5)
 
-        debug = [x1, x2, y1, y2]
+        y1 = cy - (max_dim * 0.5)
+        y2 = cy + (max_dim * 0.5)
 
         cropped = np.ascontiguousarray(img[y1:y2, x1:x2])
-        #cv2.imwrite('/app/cropped.jpg', cropped)
-        [label, confidence] = self.model.predict(cropped)
-        return label, confidence, debug
+        resized = cv2.resize(cropped, (200, 200))
+
+        # cv2.imwrite('/app/resized.jpg', resized)
+        [label, confidence] = self.model.predict(resized)
+        return self.id_to_label_hash.get(label, ""), confidence
 
     def detect_faces(self, img_buffer):
         image = self.__img_from_buffer(img_buffer, cv2.IMREAD_GRAYSCALE)
@@ -70,10 +91,8 @@ class Recognizer:
             f['width'] = int(w)
             f['height'] = int(h)
 
-            label, confidence, debug = self.__recognize_face(image, f)
-            print label, confidence, debug
+            label, confidence = self.__recognize_face(image, f)
             f['label'] = label
             f['confidence'] = confidence
-            f['debug'] = debug
             res.append(f)
         return res
