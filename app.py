@@ -7,7 +7,7 @@ import json
 app = Flask(__name__)
 with app.app_context():
     current_app.recognizer = Recognizer(
-            '/images',
+            '/app/images',
             '/app/haarcascade_frontalface_default.xml'
     )
 
@@ -21,8 +21,8 @@ def index():
 def check_user():
     img_buffer = request.files['webcam']
     res = {}
-    faces = app.recognizer.detect(img_buffer)
-    res['faces'] = faces
+    detected_faces = app.recognizer.detect_faces(img_buffer)
+    res['detected_faces'] = detected_faces
     return Response(json.dumps(res),  mimetype='application/json')
 
 if __name__ == '__main__':
