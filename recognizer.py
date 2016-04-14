@@ -19,7 +19,8 @@ class Recognizer:
                 self.id_to_label_hash[hash_id] = label
             hashed_labels.append(labels_processed[label])
 
-        self.model = cv2.createEigenFaceRecognizer(threshold=7000)
+        #self.model = cv2.createEigenFaceRecognizer(threshold=4000)
+        self.model = cv2.createLBPHFaceRecognizer(threshold=50)
         self.model.train(np.asarray(images), np.asarray(hashed_labels))
 
         self.classifier = cv2.CascadeClassifier(casc_path)
@@ -36,15 +37,23 @@ class Recognizer:
                     continue
                 try:
                     orig = cv2.imread(full_image_path, cv2.IMREAD_GRAYSCALE)
-                    mirrored = cv2.flip(orig, 0)
 
-                    images.append(orig)
+                    circle_img = np.zeros((200, 200), np.uint8)
+                    #cv2.circle(circle_img, (100, 100), 100, 1, thickness=-1)
+                    cv2.ellipse(circle_img, (100, 100), (80, 100), 0, 0, 360, (255, 255, 255), -1, 8)
+                    masked = cv2.bitwise_and(orig, orig, mask=circle_img)
+
+                    cv2.imwrite('/app/train.jpg', masked)
+
+                    mirrored = cv2.flip(masked, 0)
+
+                    images.append(masked)
                     labels.append(base_dir)
                     images.append(mirrored)
                     labels.append(base_dir)
                 except Exception as exp:
                     print exp
-                    next
+                    continue
         return images, labels
 
     def __img_from_buffer(self, buff, cv2_img_flag=0):
@@ -69,8 +78,13 @@ class Recognizer:
         cropped = np.ascontiguousarray(img[y1:y2, x1:x2])
         resized = cv2.resize(cropped, (200, 200))
 
-        # cv2.imwrite('/app/resized.jpg', resized)
-        [label, confidence] = self.model.predict(resized)
+        circle_img = np.zeros((200, 200), np.uint8)
+        #cv2.circle(circle_img, (100, 100), 100, 1, thickness=-1)
+        cv2.ellipse(circle_img, (100, 100), (80, 100), 0, 0, 360, (255, 255, 255), -1, 8)
+        masked = cv2.bitwise_and(resized, resized, mask=circle_img)
+
+        cv2.imwrite('/app/detect.jpg', masked)
+        [label, confidence] = self.model.predict(masked)
         print self.id_to_label_hash.get(label, ""), confidence
         return self.id_to_label_hash.get(label, ""), confidence
 
