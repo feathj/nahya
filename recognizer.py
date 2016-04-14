@@ -19,7 +19,7 @@ class Recognizer:
                 self.id_to_label_hash[hash_id] = label
             hashed_labels.append(labels_processed[label])
 
-        self.model = cv2.createEigenFaceRecognizer(threshold=9000)
+        self.model = cv2.createEigenFaceRecognizer(threshold=7000)
         self.model.train(np.asarray(images), np.asarray(hashed_labels))
 
         self.classifier = cv2.CascadeClassifier(casc_path)
@@ -29,17 +29,16 @@ class Recognizer:
         labels = []
         for base_dir in os.listdir(img_dir):
             if not os.path.isdir(os.path.join(img_dir, base_dir)):
-                next
+                continue
             for image_path in os.listdir(os.path.join(img_dir, base_dir)):
                 full_image_path = os.path.join(img_dir, base_dir, image_path)
-                if os.path.isdir(full_image_path):
-                    next
+                if image_path.startswith('.'):
+                    continue
                 try:
                     orig = cv2.imread(full_image_path, cv2.IMREAD_GRAYSCALE)
-                    resized = cv2.resize(orig, (200, 200))
-                    mirrored = cv2.flip(resized, 0)
+                    mirrored = cv2.flip(orig, 0)
 
-                    images.append(resized)
+                    images.append(orig)
                     labels.append(base_dir)
                     images.append(mirrored)
                     labels.append(base_dir)
@@ -72,6 +71,7 @@ class Recognizer:
 
         # cv2.imwrite('/app/resized.jpg', resized)
         [label, confidence] = self.model.predict(resized)
+        print self.id_to_label_hash.get(label, ""), confidence
         return self.id_to_label_hash.get(label, ""), confidence
 
     def detect_faces(self, img_buffer):
