@@ -27,20 +27,32 @@
                   var face = res['detected_faces'][i];
 
                   ctx.lineWidth = 2;
-                  if(face.label != ""){
+                  if(face.recognition){
                     ctx.strokeStyle = "lime";
                   } else {
                     ctx.strokeStyle = "red";
                   }
                   ctx.strokeRect(face.x, face.y, face.width, face.height);
 
-                  var label = face.label;
-                  if(label == ""){
-                    label = "???"
+                  if(face.recognition){
+                    var label = face.recognition.label;
+                    label += " (" + face.recognition.confidence + ")";
+
+                    ctx.fillStyle = "black";
+                    ctx.fillRect(face.x, face.y + face.height, face.width, 30);
+
+                    ctx.fillStyle = "white";
+                    ctx.font = "24px Arial";
+                    ctx.fillText(label, face.x + 2, face.y + face.height + 24);
                   }
-                  ctx.fillStyle = "white";
-                  ctx.font = "30px Arial";
-                  ctx.fillText(label, face.x, face.y + face.height + 35);
+
+                  // TODO: Make this representation not so terrible
+                  if(face.e1 && face.e2){
+                    ctx.strokeStyle = "blue";
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(face.x + face.e1[0], face.y + face.e1[1], face.e1[2], face.e1[3]);
+                    ctx.strokeRect(face.x + face.e2[0], face.y + face.e2[1], face.e2[2], face.e2[3]);
+                  }
                 }
               });
           });

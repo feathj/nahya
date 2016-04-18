@@ -5,7 +5,10 @@ import numpy as np
 
 class Recognizer:
 
-    def __init__(self, img_dir, casc_path):
+    def __init__(self, img_dir, face_casc_path, eye_casc_path):
+        self.face_classifier = cv2.CascadeClassifier(face_casc_path)
+        self.eye_classifier = cv2.CascadeClassifier(eye_casc_path)
+
         images, labels = self.__load_images(img_dir)
 
         self.id_to_label_hash = {}
@@ -19,11 +22,75 @@ class Recognizer:
                 self.id_to_label_hash[hash_id] = label
             hashed_labels.append(labels_processed[label])
 
-        #self.model = cv2.createEigenFaceRecognizer(threshold=4000)
-        self.model = cv2.createLBPHFaceRecognizer(threshold=50)
+        self.model = cv2.createEigenFaceRecognizer(
+                num_components=80,
+                threshold=3500
+        )
+        # self.model = cv2.createLBPHFaceRecognizer(threshold=50)
+        # self.model = cv2.createFisherFaceRecognizer(num_components=2)
         self.model.train(np.asarray(images), np.asarray(hashed_labels))
 
-        self.classifier = cv2.CascadeClassifier(casc_path)
+    def __eye_angle(self, eyes):
+        e1, e2 = eyes[0], eyes[1]
+        if e1[0] >= e2[0]:
+            e2, e1 = eyes[0], eyes[1]
+
+        e1x, e1y, e1w, e1h = e1[0], e1[1], e1[2], e1[3]
+        e2x, e2y, e2w, e2h = e2[0], e2[1], e2[2], e2[3]
+
+        e1c = (e1x + (0.5 * e1w), e1y + (0.5 * e1h))
+        e2c = (e2x + (0.5 * e2w), e2y + (0.5 * e2h))
+
+        dx = e2c[0] - e1c[0]
+        dy = e1c[1] - e2c[1]
+
+        res = np.degrees(np.arctan2(dy, dx))
+
+        return ((e1x, e1y, e1w, e1h), (e2x, e2y, e2w, e2h), res)
+
+    def __detect_eyes(self, img):
+        eyes = self.eye_classifier.detectMultiScale(img)
+        if len(eyes) == 2:
+            return self.__eye_angle(eyes)
+        return None
+
+    def __process_image(self, img):
+        img_copy = cv2.resize(img, (200, 200))
+
+        eyes = self.__detect_eyes(img_copy)
+        if eyes:
+            rot_mat = cv2.getRotationMatrix2D(
+                    (100, 100),
+                    (eyes[2] * -1.0),
+                    1.0
+            )
+            img_copy = cv2.warpAffine(
+                    img_copy,
+                    rot_mat,
+                    img_copy.shape,
+                    flags=cv2.INTER_LINEAR
+            )
+
+        circle_mask = np.zeros((200, 200), np.uint8)
+        cv2.ellipse(
+                circle_mask,
+                (100, 100),
+                (70, 90),
+                0,
+                0,
+                360,
+                (255),
+                -1,
+                8
+        )
+        masked = np.full((200, 200), 255, np.uint8)
+        np.copyto(
+                masked,
+                img_copy,
+                where=circle_mask.astype(bool, casting='unsafe')
+        )
+
+        return masked
 
     def __load_images(self, img_dir):
         images = []
@@ -37,19 +104,9 @@ class Recognizer:
                     continue
                 try:
                     orig = cv2.imread(full_image_path, cv2.IMREAD_GRAYSCALE)
+                    processed = self.__process_image(orig)
 
-                    circle_img = np.zeros((200, 200), np.uint8)
-                    #cv2.circle(circle_img, (100, 100), 100, 1, thickness=-1)
-                    cv2.ellipse(circle_img, (100, 100), (80, 100), 0, 0, 360, (255, 255, 255), -1, 8)
-                    masked = cv2.bitwise_and(orig, orig, mask=circle_img)
-
-                    cv2.imwrite('/app/train.jpg', masked)
-
-                    mirrored = cv2.flip(masked, 0)
-
-                    images.append(masked)
-                    labels.append(base_dir)
-                    images.append(mirrored)
+                    images.append(processed)
                     labels.append(base_dir)
                 except Exception as exp:
                     print exp
@@ -76,21 +133,16 @@ class Recognizer:
         y2 = cy + (max_dim * 0.5)
 
         cropped = np.ascontiguousarray(img[y1:y2, x1:x2])
-        resized = cv2.resize(cropped, (200, 200))
+        eyes = self.__detect_eyes(cropped)
+        processed = self.__process_image(cropped)
+        cv2.imwrite('detect.jpg', processed)
 
-        circle_img = np.zeros((200, 200), np.uint8)
-        #cv2.circle(circle_img, (100, 100), 100, 1, thickness=-1)
-        cv2.ellipse(circle_img, (100, 100), (80, 100), 0, 0, 360, (255, 255, 255), -1, 8)
-        masked = cv2.bitwise_and(resized, resized, mask=circle_img)
-
-        cv2.imwrite('/app/detect.jpg', masked)
-        [label, confidence] = self.model.predict(masked)
-        print self.id_to_label_hash.get(label, ""), confidence
-        return self.id_to_label_hash.get(label, ""), confidence
+        [label, confidence] = self.model.predict(processed)
+        return self.id_to_label_hash.get(label, ""), confidence, eyes
 
     def detect_faces(self, img_buffer):
         image = self.__img_from_buffer(img_buffer, cv2.IMREAD_GRAYSCALE)
-        faces = self.classifier.detectMultiScale(
+        faces = self.face_classifier.detectMultiScale(
             image,
             scaleFactor=1.3,
             minNeighbors=4,
@@ -105,8 +157,13 @@ class Recognizer:
             f['width'] = int(w)
             f['height'] = int(h)
 
-            label, confidence = self.__recognize_face(image, f)
-            f['label'] = label
-            f['confidence'] = confidence
+            label, confidence, eyes = self.__recognize_face(image, f)
+            if label:
+                f['recognition'] = {}
+                f['recognition']['label'] = label
+                f['recognition']['confidence'] = '%.2f' % confidence
+            if eyes:
+                f['e1'] = [int(i) for i in eyes[0]]
+                f['e2'] = [int(i) for i in eyes[1]]
             res.append(f)
         return res

@@ -8,7 +8,8 @@ app = Flask(__name__)
 with app.app_context():
     current_app.recognizer = Recognizer(
             '/app/images',
-            '/app/haarcascade_frontalface_default.xml'
+            '/app/haarcascade_face.xml',
+            '/app/haarcascade_eye.xml'
     )
 
 

@@ -1,3 +1,5 @@
 .DS_Store
 *.pyc
 images
+extractor/processed
+extractor/unprocessed

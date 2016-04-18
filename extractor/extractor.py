@@ -9,7 +9,7 @@ unprocessed_path = os.path.join(base_path, 'unprocessed')
 processed_path = os.path.join(base_path, 'processed')
 
 classifier = cv2.CascadeClassifier(
-        os.path.join(base_path, 'haarcascade_frontalface_default.xml')
+        os.path.join(base_path, 'haarcascade_face.xml')
 )
 
 for img_path in os.listdir(unprocessed_path):
